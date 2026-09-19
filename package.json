@@ -1,7 +1,7 @@
 {
   "name": "pi-cc-shim",
   "version": "0.1.0",
-  "description": "Make pi requests pass Claude Code fingerprint checks on relays like anyrouter",
+  "description": "🛂 Use Claude models in pi through relays that only accept Claude Code traffic (e.g. anyrouter). In-process request shim, no proxy.",
   "type": "module",
   "keywords": [
     "pi-package",

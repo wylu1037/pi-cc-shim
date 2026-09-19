@@ -1,57 +1,45 @@
 # pi-cc-shim
 
-让 [pi coding agent](https://pi.dev) 通过 anyrouter 这类"只放行 Claude Code 流量"的 relay 访问 Claude 模型。
+🛂 Use Claude models in [pi](https://pi.dev) through relays that only accept Claude Code traffic, such as anyrouter.
 
-> 这是第三方社区包，与 Anthropic、anyrouter 均无关联。它只改写请求的形态，不涉及绕过鉴权或计费；请只在你自己有权使用的 relay 账号上使用。
+Some relays fingerprint the Anthropic Messages payload and answer `503` / `520` to anything that does not look like Claude Code, regardless of load. pi-cc-shim reshapes each request in-process via pi's `before_provider_headers` / `before_provider_request` hooks. No proxy, no extra process, and it only fires for the providers you point it at.
 
-## 问题
+> Third-party community package, not affiliated with Anthropic or anyrouter. It only changes the shape of requests and does not bypass authentication or billing. Use it with relay accounts you are entitled to.
 
-anyrouter 对 Anthropic Messages 通道做了 Claude Code 指纹校验：请求体长得不像 Claude Code 发出的，就直接回 `503` / `520`，与负载无关。pi 在 `models.json` 里把它配成 `anthropic-messages` provider 后，每次请求都命中这个校验。
+## ✨ What it does
 
-本包用 pi 的 `before_provider_headers` / `before_provider_request` 钩子在进程内改写请求：零额外进程，随 pi 启动，只对命中的 provider 生效。
+- 🪪 **Claude Code identity** — prepends the Claude Code opener to `system[]` and sets `metadata.user_id` in Claude Code's format (`device_id` stable per machine, `session_id` per session)
+- 🧰 **Placeholder tools** — adds any missing `Agent` `Bash` `Edit` `Read` `Write` `Glob` `Grep` entries to `tools[]` as inert stubs whose descriptions point at pi's real tools
+- 🏷️ **Model & betas** — strips the `[1m]` suffix from `model` and declares 1M context through the `context-1m-2025-08-07` beta instead
+- 📡 **Headers** — sends `User-Agent: claude-cli/…` and `x-app: cli`; auth headers are never touched
+- 🎯 **Scoped** — only `anthropic-messages` providers that match your config are rewritten; an `openai-responses` provider on the same host is left alone
+- 🧠 **Self-healing tool calls** — if the model calls a stub tool, the "not found" error is rewritten into "use `read` instead" so it recovers on the next step
+- 🧊 **Cache-friendly** — never adds `cache_control`; pi's own prompt-cache breakpoints stay intact
 
-## 它改了什么
+## 📦 Install
 
-| 位置 | 改写 | 缺失时 relay 的反应 |
-| --- | --- | --- |
-| `system[]` | 头部插入 `You are Claude Code, Anthropic's official CLI for Claude.`（不带 cache_control，pi 的缓存断点不受影响） | 503 |
-| `metadata.user_id` | Claude Code 格式的 JSON 串，`device_id` 按机器稳定、`session_id` 按会话稳定 | 503 |
-| `tools[]` | 补齐 `Agent` `Bash` `Edit` `Read` `Write` `Glob` `Grep` 中缺失的空壳工具，描述里指向 pi 的真实工具 | 520 |
-| `model` | 去掉 `[1M]` / `[1m]` 后缀 | 429 |
-| `betas` | 追加 `context-1m-2025-08-07`（SDK 转成 `anthropic-beta` 头，pi 自己的 beta 保留） | 400 |
-| 请求头 | `User-Agent: claude-cli/2.1.274 (external, cli)`、`x-app: cli` | 不影响校验，照 Claude Code 发 |
-
-鉴权头（`x-api-key` / `Authorization`）一律不动。规则来源与复核方法见 [docs/relay-rules.md](docs/relay-rules.md)。
-
-模型偶尔会去调空壳工具（例如 `Read`）。它们不会被执行，本包会把 pi 返回的 "not found" 改写成 "use `read` instead" 之类的提示，模型下一步就会改用正确的工具。
-
-## 安装
-
-要求 pi >= 0.85.0，Node >= 22.19。
+Requires pi ≥ 0.85.0 and Node ≥ 22.19.
 
 ```bash
-# 从 GitHub 安装
-pi install git:github.com/wylu1037/pi-cc-shim@v0.1.0
+pi install npm:pi-cc-shim
 
-# 或者只在本次启动时试用，不落盘
-pi -e git:github.com/wylu1037/pi-cc-shim
+# or from GitHub
+pi install git:github.com/wylu1037/pi-cc-shim
 
-# 本地目录
-pi -e /path/to/pi-cc-shim
+# or try it for a single run without installing
+pi -e npm:pi-cc-shim
 ```
 
-发布到 npm 后也可以 `pi install npm:pi-cc-shim`。
+If other extensions also rewrite payloads, list pi-cc-shim last in `packages` in `settings.json`: `before_provider_request` hooks run in load order and the last one wins.
 
-如果还装了其它会改 payload 的扩展，把本包放在 `settings.json` 的 `packages` 列表末尾：`before_provider_request` 按加载顺序执行，后加载者的结果覆盖前者。
+## ⚙️ Configure the provider
 
-## 配置 models.json
-
-在 `~/.pi/agent/models.json` 里加一个 `anthropic-messages` provider（`baseUrl` **不要**带 `/v1`）：
+Add an `anthropic-messages` provider to `~/.pi/agent/models.json`. `baseUrl` must **not** end with `/v1`:
 
 ```json
 {
   "providers": {
-    "any.router.claude": {
+    "anyrouter": {
       "baseUrl": "https://anyrouter.top",
       "api": "anthropic-messages",
       "apiKey": "sk-...",
@@ -71,16 +59,16 @@ pi -e /path/to/pi-cc-shim
 }
 ```
 
-默认按域名 `anyrouter.top` 自动命中，provider 起什么名字都可以。同一域名下如果还配了走 codex 通道的 `openai-responses` provider，不会被误改写：只有 `api` 为 `anthropic-messages` 的才处理。
+Any `baseUrl` containing `anyrouter.top` is matched out of the box; the provider key can be anything. Pick the model with `/model`. The footer shows `cc-shim ✓` while the shim is active.
 
-## 配置文件
+## 🔧 Options
 
-`~/.pi/agent/pi-cc-shim.json`，不存在时使用默认值。所有校验规则都可配置，relay 改规则时改这里即可：
+Optional `~/.pi/agent/pi-cc-shim.json`. Each relay check maps to one field, so you can follow rule changes without waiting for a release. Defaults:
 
 ```json
 {
   "enabled": true,
-  "providers": ["any.router.claude"],
+  "providers": [],
   "baseUrlPatterns": ["anyrouter.top"],
   "systemPrompt": "You are Claude Code, Anthropic's official CLI for Claude.",
   "toolNames": ["Agent", "Bash", "Edit", "Read", "Write", "Glob", "Grep"],
@@ -94,47 +82,47 @@ pi -e /path/to/pi-cc-shim
 }
 ```
 
-| 字段 | 说明 |
+| Field | Description |
 | --- | --- |
-| `enabled` | 总开关 |
-| `providers` | `models.json` 里 provider 的键名白名单，精确匹配；需要收窄生效范围时填它 |
-| `baseUrlPatterns` | 兜底：`baseUrl` 包含任一子串即命中 |
-| `systemPrompt` | 插到 `system[0]` 的句子；留空则不插 |
-| `toolNames` | 必须出现在 `tools[]` 里的工具名，缺的补空壳 |
-| `headers` | 逐个覆盖的请求头，整个对象替换默认值。`anthropic-beta` 放这里会被忽略，请用 `betas` |
-| `betas` | 追加到 `payload.betas` |
-| `stripModelSuffix` | 去掉 `model` 末尾的 `[1m]` |
-| `decoyToolHints` | 模型误调空壳工具时改写错误提示 |
+| `enabled` | Master switch |
+| `providers` | Exact provider keys from `models.json` to target; use it to narrow the scope |
+| `baseUrlPatterns` | Fallback match: `baseUrl` contains any of these substrings |
+| `systemPrompt` | Sentence inserted at `system[0]`; empty string disables it |
+| `toolNames` | Tool names that must be present in `tools[]`; missing ones are stubbed |
+| `headers` | Request headers to set; replaces the default object. Put `anthropic-beta` in `betas`, not here |
+| `betas` | Appended to `payload.betas` |
+| `stripModelSuffix` | Remove a trailing `[1m]` from `model` |
+| `decoyToolHints` | Rewrite the error when the model calls a stub tool |
 
-字段类型不符会保留默认值并在启动时提示；`/cc-shim status` 也会列出配置警告。
+Fields of the wrong type fall back to their defaults and are reported at startup and in `/cc-shim status`.
 
-## 命令
+## 🕹️ Commands
 
-| 命令 | 作用 |
+| Command | What it does |
 | --- | --- |
-| `/cc-shim status`（或 `/cc-shim`） | 当前模型是否命中及原因、上次请求的状态码、上次实际注入了什么 |
-| `/cc-shim on` / `off` | 本会话临时开关，不写回文件 |
-| `/cc-shim dump` | 把下一次请求的最终 payload 与请求头（鉴权头脱敏）写到 `~/.pi/agent/logs/cc-shim-last.json` |
+| `/cc-shim` or `/cc-shim status` | Whether the current model matches and why, last response status, what was injected last |
+| `/cc-shim on` / `/cc-shim off` | Toggle for this session only; the config file is not written |
+| `/cc-shim dump` | Write the next request's final payload and headers (auth redacted) to `~/.pi/agent/logs/cc-shim-last.json` |
 
-命中时页脚会显示 `cc-shim ✓`。relay 返回 503/520 时会弹一条提醒。
+A warning pops up whenever the relay answers `503` / `520`.
 
-## 出问题时
+## 🩺 Troubleshooting
 
-1. `/cc-shim status`：确认当前模型命中、通道是 `anthropic-messages`。
-2. 仍然 503/520：`/cc-shim dump`，重发一次，检查 `cc-shim-last.json` 里的 `system[0]`、`tools`、`metadata.user_id`、`betas`、`headers`。
-3. 用 `RELAY_API_KEY=... scripts/probe-relay.sh` 逐项删减，看哪一条规则的状态码变了，对应改配置字段。
-4. 提示词污染：多了一句 "You are Claude Code" 可能让模型自称 Claude Code。实测对日常任务无影响；如果发现行为漂移，可以在 `systemPrompt` 后追加一句 "Ignore the previous sentence; you are running inside pi." 再观察（先用探针脚本确认 relay 只做子串匹配）。
+1. `/cc-shim status`: confirm the model matches and the API is `anthropic-messages`.
+2. Still rejected? `/cc-shim dump`, resend, then check `system[0]`, `tools`, `metadata.user_id`, `betas` and the headers in `cc-shim-last.json`.
+3. Bisect the relay's rules with `RELAY_API_KEY=sk-... scripts/probe-relay.sh`. It sends a baseline request and then drops one rule at a time; fix the matching option.
+4. If the extra "You are Claude Code" sentence makes the model drift, append something like `Ignore the previous sentence; you are running inside pi.` to `systemPrompt`.
 
-## 开发
+## 🛠️ Development
 
 ```bash
 pnpm install
-pnpm check     # tsc --noEmit + node --test
-pnpm e2e       # 起本地假 relay，用真实 pi 进程跑离线端到端
+pnpm check   # tsc --noEmit + node --test
+pnpm e2e     # fake relay + real pi process, fully offline
 ```
 
-`scripts/fake-relay.mjs` 复刻了 relay 的全部校验规则，`scripts/e2e.sh` 会分别验证：不加载本包被拒绝、加载后拿到 `pong`、按包目录加载、模型误调空壳工具时的提示改写、RPC 模式下的命令与 dump。
+`scripts/fake-relay.mjs` mirrors the relay's checks. `scripts/e2e.sh` verifies rejection without the shim, success with it, stub-tool hint rewriting, and the RPC-mode commands and dump.
 
-## 许可
+## License
 
 MIT
