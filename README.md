@@ -59,7 +59,7 @@ Add an `anthropic-messages` provider to `~/.pi/agent/models.json`. `baseUrl` mus
 }
 ```
 
-Any `baseUrl` containing `anyrouter.top` is matched out of the box; the provider key can be anything. Pick the model with `/model`. The footer shows `cc-shim ✓` while the shim is active.
+Any `baseUrl` containing `anyrouter.top` is matched out of the box; the provider key can be anything. Pick the model with `/model`. The footer shows `cc-shim 🟢` while the shim is active and `cc-shim ⚪` after `/cc-shim off`.
 
 ## 🔧 Options
 

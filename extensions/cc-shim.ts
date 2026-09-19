@@ -47,7 +47,7 @@ export default function ccShim(pi: ExtensionAPI): void {
 
 	const refreshFooter = (ctx: ExtensionContext): void => {
 		const match = evaluate(ctx);
-		const text = match.matched ? "cc-shim ✓" : match.reason === "disabled" ? "cc-shim off" : undefined;
+		const text = match.matched ? "cc-shim 🟢" : match.reason === "disabled" ? "cc-shim ⚪" : undefined;
 		ctx.ui.setStatus(STATUS_KEY, text);
 	};
 
