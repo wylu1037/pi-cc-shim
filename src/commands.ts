@@ -24,25 +24,25 @@ export function formatStatus(deps: CommandDeps, model: ModelLike | undefined): s
 	const { state, loaded, paths } = deps;
 	const match = deps.matcher.evaluate(model, state.enabled);
 	const lines: string[] = [
-		`pi-cc-shim ${match.matched ? "✓ active" : "○ inactive"}: ${describeMatch(match)}`,
-		`Model: ${model ? `${model.provider} / ${model.id} (${model.api}, ${model.baseUrl})` : "none selected"}`,
-		`Config: ${loaded.source === "file" ? paths.configFile : `built-in defaults (${paths.configFile} not found)`}`,
+		`🛂 pi-cc-shim ${match.matched ? "🟢 active" : "⚪ inactive"}: ${describeMatch(match)}`,
+		`🤖 Model: ${model ? `${model.provider} / ${model.id} (${model.api}, ${model.baseUrl})` : "none selected"}`,
+		`🔧 Config: ${loaded.source === "file" ? paths.configFile : `built-in defaults (${paths.configFile} not found)`}`,
 	];
-	if (loaded.warnings.length > 0) lines.push(`Config warnings: ${loaded.warnings.join("; ")}`);
+	if (loaded.warnings.length > 0) lines.push(`⚠️ Config warnings: ${loaded.warnings.join("; ")}`);
 
 	const last = state.lastStatus;
-	if (!last) lines.push("Last response: no requests yet");
+	if (!last) lines.push("📡 Last response: no requests yet");
 	else {
 		const code = last.code === undefined ? "status unknown" : `HTTP ${last.code}`;
 		const extra = [last.model, last.message].filter(Boolean).join(", ");
-		lines.push(`Last response: ${code} (${last.at}${extra ? `, ${extra}` : ""})`);
+		lines.push(`📡 Last response: ${code} (${last.at}${extra ? `, ${extra}` : ""})`);
 	}
 
 	if (state.lastInjection) {
-		lines.push(`Last injection (${state.lastInjection.model}, ${state.lastInjection.at}):`);
+		lines.push(`💉 Last injection (${state.lastInjection.model}, ${state.lastInjection.at}):`);
 		lines.push(...state.lastInjection.summaries.map((summary) => `  - ${summary}`));
 	}
-	if (deps.dump.armed) lines.push(`Dump: armed, next request will be written to ${paths.dumpFile}`);
+	if (deps.dump.armed) lines.push(`📝 Dump: armed, next request will be written to ${paths.dumpFile}`);
 	return lines.join("\n");
 }
 

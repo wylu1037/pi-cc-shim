@@ -92,7 +92,7 @@ try {
 	await waitFor((e) => e.type === "response" && e.command === "get_state", "get_state 响应");
 
 	const status1 = await command("/cc-shim status");
-	check(/✓ active/.test(status1), "status：命中当前模型");
+	check(/🟢 active/.test(status1), "status：命中当前模型");
 	check(/no requests yet/.test(status1), "status：尚无请求");
 
 	const dumpNotice = await command("/cc-shim dump");
@@ -122,7 +122,7 @@ try {
 	check(/disabled \(this session only\)/.test(offNotice), "off：提示已关闭");
 	await prompt("Reply with exactly: pong");
 	const status3 = await command("/cc-shim status");
-	check(/○ inactive: disabled via \/cc-shim off/.test(status3), "status：关闭后显示未生效");
+	check(/⚪ inactive: disabled via \/cc-shim off/.test(status3), "status：关闭后显示未生效");
 	check(/HTTP 503/.test(status3), "status：关闭后记录到 relay 的 503");
 
 	const onNotice = await command("/cc-shim on");

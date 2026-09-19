@@ -27,7 +27,7 @@ describe("formatStatus", () => {
 		deps.state.lastStatus = { code: 200, at: "t1", source: "response", model: "claude-fable-5-1" };
 		deps.state.lastInjection = { at: "t0", model: "claude-fable-5-1", summaries: ["model: a → b"] };
 		const text = formatStatus(deps, model);
-		assert.match(text, /✓ active: baseUrl contains "anyrouter.top"/);
+		assert.match(text, /🟢 active: baseUrl contains "anyrouter.top"/);
 		assert.match(text, /any\.router\.claude \/ claude-fable-5-1/);
 		assert.match(text, /HTTP 200/);
 		assert.match(text, /- model: a → b/);
@@ -39,9 +39,9 @@ describe("formatStatus", () => {
 		deps.state.enabled = false;
 		deps.dump.arm();
 		const text = formatStatus(deps, undefined);
-		assert.match(text, /○ inactive: disabled via \/cc-shim off/);
+		assert.match(text, /⚪ inactive: disabled via \/cc-shim off/);
 		assert.match(text, /no requests yet/);
-		assert.match(text, /Dump: armed/);
+		assert.match(text, /📝 Dump: armed/);
 	});
 });
 
@@ -60,7 +60,7 @@ describe("createShimCommand", () => {
 		const { ctx, notices } = fakeCtx(model);
 
 		await command.handler("", ctx);
-		assert.match(notices[0] ?? "", /✓ active/);
+		assert.match(notices[0] ?? "", /🟢 active/);
 
 		await command.handler("off", ctx);
 		assert.equal(deps.state.enabled, false);
