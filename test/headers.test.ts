@@ -36,13 +36,13 @@ describe("HeaderRewriter", () => {
 		assert.equal(headers["User-Agent"], "ua");
 		assert.equal(headers["user-agent"], null);
 		assert.equal(headers["x-api-key"], "k", "不动鉴权头");
-		assert.deepEqual(summaries, ['User-Agent: "pi/0.85" → "ua"', 'x-app: 已是 "cli"']);
+		assert.deepEqual(summaries, ['User-Agent: "pi/0.85" → "ua"', 'x-app: already "cli"']);
 	});
 
 	test("空对象也能写入", () => {
 		const headers: ProviderHeaders = {};
 		const summaries = rewriter.apply(headers);
 		assert.deepEqual(headers, { "User-Agent": "ua", "x-app": "cli" });
-		assert.deepEqual(summaries, ['User-Agent: 设为 "ua"', 'x-app: 设为 "cli"']);
+		assert.deepEqual(summaries, ['User-Agent: set to "ua"', 'x-app: set to "cli"']);
 	});
 });

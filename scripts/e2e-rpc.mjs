@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 /**
- * 通过 pi 的 RPC 模式驱动一整段会话，验证 /cc-shim 命令、dump 落盘与状态记录。
- * 由 scripts/e2e.sh 调用；也可单独运行：
- *   PI_CODING_AGENT_DIR=<临时 agent 目录> node scripts/e2e-rpc.mjs <扩展入口路径>
- * 退出码 0 表示全部断言通过。
+ * Drives a full session through pi's RPC mode to verify the /cc-shim commands, dump output and status tracking.
+ * Called by scripts/e2e.sh; can also run standalone:
+ *   PI_CODING_AGENT_DIR=<temp agent dir> node scripts/e2e-rpc.mjs <extension entry path>
+ * Exit code 0 means every assertion passed.
  */
 import { spawn } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
@@ -67,7 +67,7 @@ const isNotify = (event) => event.type === "extension_ui_request" && event.metho
 const notifyText = (event) => String(event.message ?? event.text ?? event.title ?? "");
 const notifyIndex = () => events.filter(isNotify).length;
 
-/** 发送一条扩展命令并等待它产生的下一条 notify */
+/** Send one extension command and wait for the next notify it produces */
 async function command(text) {
 	const before = notifyIndex();
 	send({ type: "prompt", message: text });
@@ -92,8 +92,8 @@ try {
 	await waitFor((e) => e.type === "response" && e.command === "get_state", "get_state 响应");
 
 	const status1 = await command("/cc-shim status");
-	check(/生效中/.test(status1), "status：命中当前模型");
-	check(/尚无请求/.test(status1), "status：尚无请求");
+	check(/✓ active/.test(status1), "status：命中当前模型");
+	check(/no requests yet/.test(status1), "status：尚无请求");
 
 	const dumpNotice = await command("/cc-shim dump");
 	check(/cc-shim-last\.json/.test(dumpNotice), "dump：提示写入路径");
@@ -119,20 +119,20 @@ try {
 	check(/User-Agent/.test(status2), "status：展示请求头改写摘要");
 
 	const offNotice = await command("/cc-shim off");
-	check(/已关闭/.test(offNotice), "off：提示已关闭");
+	check(/disabled \(this session only\)/.test(offNotice), "off：提示已关闭");
 	await prompt("Reply with exactly: pong");
 	const status3 = await command("/cc-shim status");
-	check(/未生效：已通过 \/cc-shim off 关闭/.test(status3), "status：关闭后显示未生效");
+	check(/○ inactive: disabled via \/cc-shim off/.test(status3), "status：关闭后显示未生效");
 	check(/HTTP 503/.test(status3), "status：关闭后记录到 relay 的 503");
 
 	const onNotice = await command("/cc-shim on");
-	check(/已启用/.test(onNotice), "on：提示已启用");
+	check(/enabled \(this session only\)/.test(onNotice), "on：提示已启用");
 	await prompt("Reply with exactly: pong");
 	const status4 = await command("/cc-shim status");
 	check(/HTTP 200/.test(status4), "status：重新启用后再次 200");
 
 	const bogus = await command("/cc-shim bogus");
-	check(/未知子命令/.test(bogus), "未知子命令：报错");
+	check(/unknown subcommand/.test(bogus), "未知子命令：报错");
 } catch (error) {
 	failures.push(String(error));
 	console.log(`FAIL ${String(error)}`);

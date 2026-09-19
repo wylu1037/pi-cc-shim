@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# 离线端到端：起假 relay，用临时 agent 目录跑真实的 pi 进程。
-# 预期：不加载 shim 时被 503 拒绝；加载 shim 后拿到 "pong"。
+# Offline end-to-end: start the fake relay and run a real pi process against a temporary agent dir.
+# Expected: rejected with 503 without the shim; "pong" with it.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -55,7 +55,7 @@ cat >"$TMP/pi-cc-shim.json" <<'JSON'
 { "providers": ["fake.relay"] }
 JSON
 
-# 用法：run_pi <prompt> [pi 额外参数...]
+# Usage: run_pi <prompt> [extra pi args...]
 run_pi() {
 	local prompt="$1"
 	shift

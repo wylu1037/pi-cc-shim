@@ -113,6 +113,15 @@ A warning pops up whenever the relay answers `503` / `520`.
 3. Bisect the relay's rules with `RELAY_API_KEY=sk-... scripts/probe-relay.sh`. It sends a baseline request and then drops one rule at a time; fix the matching option.
 4. If the extra "You are Claude Code" sentence makes the model drift, append something like `Ignore the previous sentence; you are running inside pi.` to `systemPrompt`.
 
+The status code tells you which check failed (observed on anyrouter, 2026-09-18; relays change their rules without notice):
+
+| Relay answers | What it checks | Option |
+| --- | --- | --- |
+| `503` | Claude Code opener in `system[]`, or the shape of `metadata.user_id` | `systemPrompt` (`user_id` is automatic) |
+| `520` | At least 4 Claude Code tool names in `tools[]` | `toolNames` |
+| `429` | `model` still carries a `[1M]` suffix | `stripModelSuffix` |
+| `400` | `anthropic-beta` header lacks `context-1m-2025-08-07` | `betas` |
+
 ## 🛠️ Development
 
 ```bash

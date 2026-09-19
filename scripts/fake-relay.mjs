@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 /**
- * 本地假 relay：复刻 docs/relay-rules.md 里 anyrouter 对 Claude Code 流量的指纹校验，
- * 用于离线端到端测试（scripts/e2e.sh）。校验通过时回一段最小的 Anthropic SSE 流（"pong"）。
+ * Local fake relay: mirrors anyrouter's Claude Code fingerprint checks (see Troubleshooting in README.md),
+ * used by the offline end-to-end test (scripts/e2e.sh). When the checks pass it replies with a minimal Anthropic SSE stream ("pong").
  *
- * 用法：PORT=8787 node scripts/fake-relay.mjs
+ * Usage: PORT=8787 node scripts/fake-relay.mjs
  */
 import { createServer } from "node:http";
 
@@ -16,7 +16,7 @@ const CC_TOOLS = new Set([
 	"Skill", "Task", "TaskOutput", "TodoWrite", "WebFetch", "WebSearch",
 ]);
 
-/** 返回 [status, reason]，顺序与实测的规则表一致 */
+/** Returns [status, reason], in the same order as the observed rule table */
 function check(body, headers) {
 	const system = typeof body.system === "string" ? [{ type: "text", text: body.system }] : Array.isArray(body.system) ? body.system : [];
 	if (!system.some((b) => b?.type === "text" && typeof b.text === "string" && b.text.includes(CC_SENTENCE))) {
@@ -56,7 +56,7 @@ function streamText(res, model, text) {
 	res.end();
 }
 
-/** 让模型"误调"诱饵工具 Read，用于验证 pi-cc-shim 对 toolResult 的改写 */
+/** Makes the model "accidentally" call the decoy tool Read, to verify pi-cc-shim's toolResult rewrite */
 function streamDecoyToolUse(res, model) {
 	const send = (event, data) => res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
 	res.writeHead(200, { "content-type": "text/event-stream", "cache-control": "no-cache" });
@@ -72,7 +72,7 @@ function streamDecoyToolUse(res, model) {
 	res.end();
 }
 
-/** 找出最后一条 user 消息里的 tool_result 文本，没有则返回 undefined */
+/** Extract the tool_result text from the last user message, or undefined if there is none */
 function lastToolResultText(messages) {
 	const last = Array.isArray(messages) ? messages[messages.length - 1] : undefined;
 	if (!last || last.role !== "user" || !Array.isArray(last.content)) return undefined;
@@ -114,7 +114,7 @@ createServer((req, res) => {
 			res.end(JSON.stringify({ error: { type: "fingerprint_check", message: reason } }));
 			return;
 		}
-		// 剧本：用户说 call-decoy → 回一个对 Read 的 tool_use；收到 tool_result → 原样回显其文本；其余 → pong
+		// Script: user says call-decoy → reply with a tool_use for Read; on tool_result → echo its text; otherwise → pong
 		const toolResultText = lastToolResultText(body.messages);
 		if (toolResultText !== undefined) streamText(res, body.model, `tool_result: ${toolResultText}`);
 		else if (lastUserText(body.messages).includes("call-decoy")) streamDecoyToolUse(res, body.model);

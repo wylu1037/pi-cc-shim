@@ -1,8 +1,8 @@
 export interface StatusRecord {
-	/** HTTP 状态码；从错误文本里解析不出来时为空 */
+	/** HTTP status code; undefined when it cannot be parsed from the error text */
 	code?: number;
 	at: string;
-	/** response = after_provider_response 看到的成功响应；error = 从 assistant 错误消息解析 */
+	/** response = successful response seen by after_provider_response; error = parsed from the assistant error message */
 	source: "response" | "error";
 	model?: string;
 	message?: string;
@@ -14,14 +14,14 @@ export interface InjectionRecord {
 	summaries: string[];
 }
 
-/** 会话级状态；/new、/resume 等触发 session_start 时整体重置 */
+/** Session-level state; fully reset whenever session_start fires (/new, /resume, etc.) */
 export interface SessionState {
 	enabled: boolean;
 	lastStatus?: StatusRecord;
 	lastInjection?: InjectionRecord;
-	/** 最近一次请求里由本扩展追加的空壳工具名，用于识别模型误调 */
+	/** Stub tool names this extension appended to the last request, used to detect stray model calls */
 	decoyNames: ReadonlySet<string>;
-	/** 已提醒过的拒绝状态码，避免 pi 重试期间刷屏；成功响应后清零 */
+	/** Rejection status already alerted on, to avoid spamming during pi retries; cleared after a successful response */
 	alertedStatus?: number;
 }
 

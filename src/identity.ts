@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { hostname, userInfo } from "node:os";
 
-/** device_id 按机器稳定：sha256(hostname:username) 的 hex，与 Claude Code 的 64 位 hex 形态一致 */
+/** device_id is stable per machine: hex of sha256(hostname:username), matching Claude Code's 64-char hex shape */
 export function computeDeviceId(host: string, user: string): string {
 	return createHash("sha256").update(`${host}:${user}`).digest("hex");
 }
@@ -11,12 +11,12 @@ export function localDeviceId(): string {
 	try {
 		user = userInfo().username;
 	} catch {
-		// 某些容器环境没有 passwd 记录，退回固定值即可，只影响伪造 id 的取值
+		// Some container environments have no passwd entry; a fixed fallback is fine, it only affects the synthesized id
 	}
 	return computeDeviceId(hostname(), user);
 }
 
-/** Claude Code 的 metadata.user_id 是一段 JSON 字符串，字段顺序与其保持一致 */
+/** Claude Code's metadata.user_id is a JSON string; keep the same field order */
 export function buildUserId(deviceId: string, sessionId: string): string {
 	return JSON.stringify({ device_id: deviceId, account_uuid: "", session_id: sessionId });
 }

@@ -1,8 +1,8 @@
 /**
- * pi-cc-shim：让 pi 经由 anyrouter 这类"只放行 Claude Code 流量"的 relay 访问 Claude 模型。
+ * pi-cc-shim: lets pi reach Claude models through relays such as anyrouter that only admit Claude Code traffic.
  *
- * 这里只做装配与钩子接线，改写逻辑都在 ../src 下的纯函数里。
- * 设计说明见 docs/pi-cc-shim-design.md，relay 校验规则见 docs/relay-rules.md。
+ * This file only wires hooks together; all rewriting logic lives in pure functions under ../src.
+ * The relay checks each rule answers are listed under Troubleshooting in README.md.
  */
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
@@ -23,7 +23,7 @@ function now(): string {
 	return new Date().toISOString();
 }
 
-/** 只取判定与快照需要的字段，避免把 models.json 里的鉴权头一起写进 dump */
+/** Pick only the fields needed for matching and snapshots, so auth headers from models.json never end up in the dump */
 function toModelLike(model: ExtensionContext["model"]): ModelLike | undefined {
 	if (!model) return undefined;
 	return { provider: model.provider, api: model.api, baseUrl: model.baseUrl, id: model.id, name: model.name };
@@ -40,7 +40,7 @@ export default function ccShim(pi: ExtensionAPI): void {
 	const headerRewriter = new HeaderRewriter(config.headers);
 	const dump = new DumpRecorder(paths.dumpFile);
 	const deviceId = localDeviceId();
-	/** headers 钩子先于 request 钩子触发，摘要暂存后并入同一条注入记录 */
+	/** The headers hook fires before the request hook; its summaries are buffered and merged into the same injection record */
 	let pendingHeaderSummaries: string[] = [];
 
 	const evaluate = (ctx: ExtensionContext) => matcher.evaluate(toModelLike(ctx.model), state.enabled);
@@ -55,7 +55,7 @@ export default function ccShim(pi: ExtensionAPI): void {
 		resetSessionState(state, config.enabled);
 		pendingHeaderSummaries = [];
 		if (loaded.warnings.length > 0 && (event.reason === "startup" || event.reason === "reload")) {
-			ctx.ui.notify(`cc-shim 配置警告：\n${loaded.warnings.join("\n")}`, "warning");
+			ctx.ui.notify(`cc-shim config warnings:\n${loaded.warnings.join("\n")}`, "warning");
 		}
 		refreshFooter(ctx);
 	});
@@ -89,7 +89,7 @@ export default function ccShim(pi: ExtensionAPI): void {
 		state.lastInjection = { at: now(), model: model?.id ?? "?", summaries };
 
 		const written = dump.captureRequest({ model, applied: true, matchReason: describeMatch(match), summaries, payload });
-		if (written) ctx.ui.notify(`cc-shim: 已写入 ${written}`, "info");
+		if (written) ctx.ui.notify(`cc-shim: written to ${written}`, "info");
 		return payload;
 	});
 

@@ -1,11 +1,11 @@
 import type { ProviderHeaders } from "./types.ts";
 
 /**
- * 大小写不敏感地覆盖一个请求头。
+ * Case-insensitively override one request header.
  *
- * event.headers 里可能已有同名但大小写不同的键（来自 models.json 的 headers 或 pi 的归因头）。
- * 后续 pi-ai 用 Object.assign 合并（区分大小写），SDK 再按大小写不敏感规整；
- * 只有把其它写法显式置为 null（pi 约定 null = 删除），最终才能保证只剩我们的值。
+ * event.headers may already contain the same name with different casing (from models.json headers or pi's attribution headers).
+ * pi-ai then merges with Object.assign (case-sensitive) and the SDK normalizes case-insensitively;
+ * only by explicitly setting the other spellings to null (pi's convention: null = delete) can we guarantee ours is the only value left.
  */
 export function setHeader(headers: ProviderHeaders, name: string, value: string): void {
 	const lower = name.toLowerCase();
@@ -30,14 +30,14 @@ export class HeaderRewriter {
 		this.#overrides = overrides;
 	}
 
-	/** 原地改写（pi 忽略该钩子的返回值），返回每个头的变更摘要 */
+	/** Mutates in place (pi ignores this hook's return value); returns a change summary per header */
 	apply(headers: ProviderHeaders): string[] {
 		const summaries: string[] = [];
 		for (const [name, value] of Object.entries(this.#overrides)) {
 			const before = getHeader(headers, name);
 			setHeader(headers, name, value);
-			if (before === undefined) summaries.push(`${name}: 设为 "${value}"`);
-			else if (before === value) summaries.push(`${name}: 已是 "${value}"`);
+			if (before === undefined) summaries.push(`${name}: set to "${value}"`);
+			else if (before === value) summaries.push(`${name}: already "${value}"`);
 			else summaries.push(`${name}: "${before}" → "${value}"`);
 		}
 		return summaries;

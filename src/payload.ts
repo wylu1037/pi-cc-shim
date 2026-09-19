@@ -3,8 +3,8 @@ import { buildUserId } from "./identity.ts";
 import { isRecord, type AnthropicPayload, type TextBlock, type ToolDefinition } from "./types.ts";
 
 /**
- * 请求体改写：每条 relay 校验规则对应一个 PayloadRule，PayloadRewriter 按顺序串起来（责任链）。
- * 规则都是纯函数：不修改入参，只返回新对象；便于单测，也避免污染其它扩展看到的 payload。
+ * Payload rewriting: each relay check maps to one PayloadRule, chained in order by PayloadRewriter (chain of responsibility).
+ * Rules are pure functions: they never mutate the input and always return a new object, which keeps them unit-testable and avoids polluting the payload other extensions see.
  */
 
 export interface RewriteContext {
@@ -14,7 +14,7 @@ export interface RewriteContext {
 
 export interface RuleResult {
 	payload: AnthropicPayload;
-	/** 本条规则实际做了什么；没做任何改动时省略 */
+	/** What this rule actually did; omitted when nothing changed */
 	summary?: string;
 }
 
@@ -24,7 +24,7 @@ export interface PayloadRule {
 }
 
 // ---------------------------------------------------------------------------
-// model：去掉 [1m] 后缀，1M 上下文改由 betas 声明
+// model: strip the [1m] suffix; 1M context is declared via betas instead
 // ---------------------------------------------------------------------------
 
 const MODEL_SUFFIX = /\[1m\]$/i;
@@ -40,7 +40,7 @@ export const stripModelSuffixRule: PayloadRule = {
 };
 
 // ---------------------------------------------------------------------------
-// system：头部插入开场句，不带 cache_control，pi 原有的缓存断点原样保留
+// system: prepend the opener without cache_control so pi's existing cache breakpoints stay intact
 // ---------------------------------------------------------------------------
 
 function normalizeSystem(system: unknown): TextBlock[] {
@@ -54,22 +54,22 @@ export function systemPromptRule(text: string): PayloadRule {
 		name: "system",
 		apply(payload) {
 			const existing = normalizeSystem(payload.system);
-			// 已经有完全相同的块（例如 OAuth 模式下 pi 自己插的）就不重复插，保持幂等
+			// Skip if an identical block already exists (e.g. inserted by pi itself in OAuth mode), keeping this idempotent
 			if (existing.some((block) => block.type === "text" && block.text === text)) return { payload };
 			const block: TextBlock = { type: "text", text };
 			return {
 				payload: { ...payload, system: [block, ...existing] },
-				summary: `system: 头部插入 Claude Code 开场句（原有 ${existing.length} 块保留）`,
+				summary: `system: prepended Claude Code opener (${existing.length} existing kept)`,
 			};
 		},
 	};
 }
 
 // ---------------------------------------------------------------------------
-// tools：补齐缺失的 Claude Code 工具名（空壳），描述里指向 pi 的真实工具
+// tools: add missing Claude Code tool names as stubs whose descriptions point at pi's real tools
 // ---------------------------------------------------------------------------
 
-/** Claude Code 工具名 → pi 内置工具候选（按优先级）；没列出的默认尝试小写同名 */
+/** Claude Code tool name → candidate pi built-in tools (by priority); unlisted names fall back to the lowercase equivalent */
 const ALTERNATIVES: Readonly<Record<string, readonly string[]>> = {
 	Glob: ["find", "ls"],
 	Grep: ["grep"],
@@ -96,7 +96,7 @@ export function toolNames(payload: AnthropicPayload): string[] {
 	return Array.isArray(payload.tools) ? payload.tools.map((tool) => tool.name) : [];
 }
 
-/** 前后对比得出本扩展追加的工具名，供响应侧识别模型误调 */
+/** Diff before/after to find the tool names this extension appended, so the response side can detect stray model calls */
 export function addedToolNames(before: AnthropicPayload, after: AnthropicPayload): string[] {
 	const had = new Set(toolNames(before));
 	return toolNames(after).filter((name) => !had.has(name));
@@ -113,16 +113,16 @@ export function decoyToolsRule(names: readonly string[]): PayloadRule {
 			const realNames = existing.map((tool) => tool.name);
 			const decoys = missing.map((name) => buildDecoyTool(name, realNames));
 			return {
-				// 追加在末尾：pi 把 cache_control 放在自己最后一个工具上，前插会打乱缓存前缀
+				// Append at the end: pi puts cache_control on its own last tool, so prepending would break the cache prefix
 				payload: { ...payload, tools: [...existing, ...decoys] },
-				summary: `tools: 追加空壳 ${missing.join(", ")}（原有 ${existing.length} 个保留）`,
+				summary: `tools: appended stubs ${missing.join(", ")} (${existing.length} existing kept)`,
 			};
 		},
 	};
 }
 
 // ---------------------------------------------------------------------------
-// metadata.user_id：Claude Code 格式的 JSON 串；已有 metadata 时只覆盖这一个键
+// metadata.user_id: JSON string in Claude Code format; only this key is overwritten when metadata already exists
 // ---------------------------------------------------------------------------
 
 export const metadataRule: PayloadRule = {
@@ -133,13 +133,13 @@ export const metadataRule: PayloadRule = {
 		if (metadata.user_id === userId) return { payload };
 		return {
 			payload: { ...payload, metadata: { ...metadata, user_id: userId } },
-			summary: `metadata.user_id: 设为 Claude Code 格式（session ${ctx.sessionId}）`,
+			summary: `metadata.user_id: set to Claude Code format (session ${ctx.sessionId})`,
 		};
 	},
 };
 
 // ---------------------------------------------------------------------------
-// betas：追加到 pi 自己算出的 beta 列表之后，SDK 会合成 anthropic-beta 头
+// betas: appended after the betas pi computed itself; the SDK turns them into the anthropic-beta header
 // ---------------------------------------------------------------------------
 
 export function betasRule(betas: readonly string[]): PayloadRule {
@@ -153,14 +153,14 @@ export function betasRule(betas: readonly string[]): PayloadRule {
 			if (missing.length === 0) return { payload };
 			return {
 				payload: { ...payload, betas: [...existing, ...missing] },
-				summary: `betas: 追加 ${missing.join(", ")}`,
+				summary: `betas: appended ${missing.join(", ")}`,
 			};
 		},
 	};
 }
 
 // ---------------------------------------------------------------------------
-// 责任链
+// Chain of responsibility
 // ---------------------------------------------------------------------------
 
 export interface RewriteOutcome {
@@ -191,7 +191,7 @@ export class PayloadRewriter {
 	}
 }
 
-/** 按配置装配规则链；关掉的规则不进链，避免运行时反复判断开关 */
+/** Assemble the rule chain from config; disabled rules are left out so no flags are re-checked at runtime */
 export function createPayloadRewriter(config: ShimConfig): PayloadRewriter {
 	const rules: PayloadRule[] = [];
 	if (config.stripModelSuffix) rules.push(stripModelSuffixRule);

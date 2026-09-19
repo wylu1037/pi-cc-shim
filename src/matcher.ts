@@ -4,29 +4,29 @@ import type { ModelLike } from "./types.ts";
 export const ANTHROPIC_MESSAGES_API = "anthropic-messages";
 
 export type MatchReason =
-	/** 会话内已通过 /cc-shim off 关闭 */
+	/** Disabled in this session via /cc-shim off */
 	| "disabled"
-	/** 尚未选择模型 */
+	/** No model selected yet */
 	| "no-model"
-	/** 不是 anthropic-messages 通道（例如同一域名下走 codex 的 openai-responses provider） */
+	/** Not the anthropic-messages api (e.g. an openai-responses provider on the same host that goes through codex) */
 	| "api-mismatch"
-	/** 命中 providers 白名单 */
+	/** Matched the providers allowlist */
 	| "provider"
-	/** 命中 baseUrlPatterns 域名兜底 */
+	/** Matched the baseUrlPatterns fallback */
 	| "base-url"
-	/** 两种规则都没命中 */
+	/** Neither rule matched */
 	| "unmatched";
 
 export interface MatchResult {
 	matched: boolean;
 	reason: MatchReason;
-	/** 命中或失配的具体依据，用于 status 展示 */
+	/** Concrete evidence for the match or mismatch, shown by status */
 	detail?: string;
 }
 
 /**
- * 判定当前模型是否需要改写。三个 provider 钩子与命令共用同一份判定，顺序固定：
- * 开关 → 有模型 → 通道 → providers 白名单 → baseUrl 兜底。
+ * Decides whether the current model needs rewriting. The three provider hooks and the command share this one decision, in a fixed order:
+ * switch → model present → api → providers allowlist → baseUrl fallback.
  */
 export class TargetMatcher {
 	readonly #rules: Pick<ShimConfig, "providers" | "baseUrlPatterns">;
@@ -52,12 +52,12 @@ export class TargetMatcher {
 }
 
 const REASON_TEXT: Record<MatchReason, (detail?: string) => string> = {
-	disabled: () => "已通过 /cc-shim off 关闭",
-	"no-model": () => "尚未选择模型",
-	"api-mismatch": (detail) => `当前通道为 ${detail ?? "未知"}，只处理 ${ANTHROPIC_MESSAGES_API}`,
-	provider: (detail) => `provider "${detail}" 在 providers 白名单中`,
-	"base-url": (detail) => `baseUrl 包含 "${detail}"`,
-	unmatched: () => "provider 不在白名单，baseUrl 也未匹配任何 pattern",
+	disabled: () => "disabled via /cc-shim off",
+	"no-model": () => "no model selected",
+	"api-mismatch": (detail) => `api is ${detail ?? "unknown"}, only ${ANTHROPIC_MESSAGES_API} is handled`,
+	provider: (detail) => `provider "${detail}" is in the providers allowlist`,
+	"base-url": (detail) => `baseUrl contains "${detail}"`,
+	unmatched: () => "provider not in allowlist and baseUrl matches no pattern",
 };
 
 export function describeMatch(result: MatchResult): string {

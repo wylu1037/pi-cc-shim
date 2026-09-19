@@ -1,4 +1,4 @@
-# pi-coding-agent 的传递依赖带有 build 脚本，本包用不到，显式拒绝以免 pnpm 11 在每次运行脚本前报错
+# Transitive deps of pi-coding-agent ship build scripts this package does not need; deny them explicitly so pnpm 11 stops complaining before every script run
 allowBuilds:
   "@google/genai": false
   esbuild: false

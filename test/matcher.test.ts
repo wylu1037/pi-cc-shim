@@ -49,7 +49,7 @@ describe("TargetMatcher", () => {
 		assert.equal(loose.evaluate(model({ provider: "x" }), true).matched, false);
 	});
 
-	test("describeMatch 给出中文说明", () => {
+	test("describeMatch 给出说明文本", () => {
 		assert.match(describeMatch({ matched: true, reason: "base-url", detail: "anyrouter.top" }), /anyrouter\.top/);
 		assert.match(describeMatch({ matched: false, reason: "api-mismatch", detail: "openai-responses" }), /openai-responses/);
 	});

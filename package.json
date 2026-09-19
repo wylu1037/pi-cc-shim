@@ -27,7 +27,6 @@
     "extensions",
     "src",
     "scripts",
-    "docs/relay-rules.md",
     "README.md",
     "LICENSE"
   ],

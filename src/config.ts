@@ -3,27 +3,27 @@ import { join } from "node:path";
 import { isRecord } from "./types.ts";
 
 /**
- * 用户配置 ~/.pi/agent/pi-cc-shim.json。
- * relay 的每条校验规则都对应一个可改的字段，规则漂移时改 JSON 即可，不必等发版。
+ * User config at ~/.pi/agent/pi-cc-shim.json.
+ * Every relay check maps to an editable field, so rule drift can be fixed by editing JSON without waiting for a release.
  */
 export interface ShimConfig {
-	/** 总开关；/cc-shim on|off 只改会话态，不写回文件 */
+	/** Master switch; /cc-shim on|off only changes session state and never writes back to the file */
 	enabled: boolean;
-	/** models.json 里 providers 的键名白名单，与 ctx.model.provider 精确匹配 */
+	/** Allowlist of provider keys from models.json, matched exactly against ctx.model.provider */
 	providers: string[];
-	/** 兜底规则：ctx.model.baseUrl 包含任一子串即命中 */
+	/** Fallback rule: matches when ctx.model.baseUrl contains any of these substrings */
 	baseUrlPatterns: string[];
-	/** 插到 system[0] 的 Claude Code 开场句 */
+	/** Claude Code opener inserted at system[0] */
 	systemPrompt: string;
-	/** 必须出现在 tools[] 里的 Claude Code 工具名，缺的补空壳 */
+	/** Claude Code tool names that must be present in tools[]; missing ones get stubs */
 	toolNames: string[];
-	/** 逐个覆盖的请求头。不要放 anthropic-beta，请改用 betas */
+	/** Request headers overridden one by one. Do not put anthropic-beta here; use betas instead */
 	headers: Record<string, string>;
-	/** 追加到 payload.betas；SDK 会把它转成 anthropic-beta 头 */
+	/** Appended to payload.betas; the SDK turns it into the anthropic-beta header */
 	betas: string[];
-	/** 去掉 model 末尾的 [1m] / [1M] 后缀 */
+	/** Strip a trailing [1m] / [1M] suffix from model */
 	stripModelSuffix: boolean;
-	/** 模型误调诱饵工具时，把 "not found" 改写成指向真实工具的提示 */
+	/** When the model calls a decoy tool, rewrite "not found" into a hint pointing at the real tool */
 	decoyToolHints: boolean;
 }
 
@@ -42,7 +42,7 @@ const DEFAULTS: ShimConfig = {
 	decoyToolHints: true,
 };
 
-/** 每次返回新副本，避免调用方误改共享默认值 */
+/** Returns a fresh copy each time so callers cannot accidentally mutate the shared defaults */
 export function defaultConfig(): ShimConfig {
 	return structuredClone(DEFAULTS);
 }
@@ -64,7 +64,7 @@ export function resolvePaths(agentDir: string): ShimPaths {
 }
 
 // ---------------------------------------------------------------------------
-// 校验：表驱动，新增字段只需在 FIELD_KINDS 里登记一行
+// Validation: table-driven; a new field only needs one entry in FIELD_KINDS
 // ---------------------------------------------------------------------------
 
 type FieldKind = "boolean" | "string" | "string[]" | "headers";
@@ -82,10 +82,10 @@ const FIELD_KINDS: Record<keyof ShimConfig, FieldKind> = {
 };
 
 const KIND_TEXT: Record<FieldKind, string> = {
-	boolean: "布尔值",
-	string: "字符串",
-	"string[]": "字符串数组",
-	headers: "字符串到字符串的对象",
+	boolean: "a boolean",
+	string: "a string",
+	"string[]": "an array of strings",
+	headers: "an object of string values",
 };
 
 function accepts(kind: FieldKind, value: unknown): boolean {
@@ -106,12 +106,12 @@ export interface MergeResult {
 	warnings: string[];
 }
 
-/** 把用户 JSON 合并到默认值上；类型不符的字段保留默认值并给出警告，绝不因配置错误让扩展失效 */
+/** Merge user JSON onto the defaults; mistyped fields keep their default and produce a warning, so a bad config never disables the extension */
 export function mergeConfig(raw: unknown): MergeResult {
 	const config = defaultConfig();
 	const warnings: string[] = [];
 	if (!isRecord(raw)) {
-		warnings.push("配置文件顶层不是 JSON 对象，已全部使用默认值");
+		warnings.push("config root is not a JSON object, using all defaults");
 		return { config, warnings };
 	}
 
@@ -120,21 +120,21 @@ export function mergeConfig(raw: unknown): MergeResult {
 		if (!(key in raw)) continue;
 		const value = raw[key];
 		if (!accepts(kind, value)) {
-			warnings.push(`字段 ${key} 应为${KIND_TEXT[kind]}，已使用默认值`);
+			warnings.push(`field ${key} must be ${KIND_TEXT[kind]}, using default`);
 			continue;
 		}
 		target[key] = value;
 	}
 	for (const key of Object.keys(raw)) {
-		if (!(key in FIELD_KINDS)) warnings.push(`未知字段 ${key}，已忽略`);
+		if (!(key in FIELD_KINDS)) warnings.push(`unknown field ${key} ignored`);
 	}
 
-	// pi-ai 一旦在请求头里看到 anthropic-beta，就把它当作完整 beta 列表并放弃自己动态计算的 beta，
-	// 所以这个头只能通过 betas 字段走 payload 追加。
+	// Once pi-ai sees anthropic-beta in the request headers it treats it as the full beta list and drops its own computed betas,
+	// so this header may only be added through the betas field on the payload.
 	const betaHeader = Object.keys(config.headers).find((name) => name.toLowerCase() === "anthropic-beta");
 	if (betaHeader !== undefined) {
 		delete config.headers[betaHeader];
-		warnings.push(`headers 里的 ${betaHeader} 已忽略，请改用 betas 字段`);
+		warnings.push(`${betaHeader} in headers ignored, use the betas field instead`);
 	}
 	return { config, warnings };
 }
@@ -147,14 +147,14 @@ export type FileReader = (path: string) => string;
 
 const readUtf8: FileReader = (path) => readFileSync(path, "utf8");
 
-/** 文件不存在时静默使用默认值；其它错误（权限、JSON 语法）记为警告 */
+/** Silently use defaults when the file is missing; other errors (permissions, JSON syntax) become warnings */
 export function loadConfig(filePath: string, read: FileReader = readUtf8): LoadedConfig {
 	let text: string;
 	try {
 		text = read(filePath);
 	} catch (error) {
 		const code = (error as NodeJS.ErrnoException).code;
-		const warnings = code === "ENOENT" ? [] : [`读取 ${filePath} 失败：${String(error)}`];
+		const warnings = code === "ENOENT" ? [] : [`failed to read ${filePath}: ${String(error)}`];
 		return { config: defaultConfig(), warnings, source: "defaults" };
 	}
 
@@ -164,7 +164,7 @@ export function loadConfig(filePath: string, read: FileReader = readUtf8): Loade
 	} catch (error) {
 		return {
 			config: defaultConfig(),
-			warnings: [`${filePath} 不是合法 JSON：${(error as Error).message}`],
+			warnings: [`${filePath} is not valid JSON: ${(error as Error).message}`],
 			source: "defaults",
 		};
 	}

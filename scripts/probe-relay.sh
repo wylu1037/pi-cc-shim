@@ -1,20 +1,27 @@
 #!/usr/bin/env bash
-# 向 relay 发送最小可通过 Claude Code 指纹校验的请求，并按变体逐项删减，定位是哪条规则变了。
-# 变体与预期见 docs/relay-rules.md。
+# Send the minimal request that passes the relay's Claude Code fingerprint check, then drop one rule per variant to find which rule changed.
 #
-# 用法：
-#   RELAY_API_KEY=sk-xxx scripts/probe-relay.sh            # 跑全部变体
-#   RELAY_API_KEY=sk-xxx scripts/probe-relay.sh baseline   # 只跑指定变体（可多个）
-# 环境变量：
-#   RELAY_BASE_URL  默认 https://anyrouter.top（不要带 /v1）
-#   RELAY_MODEL     默认 claude-fable-5-1
-#   RELAY_AUTH      api-key（默认，发 x-api-key）或 bearer（发 Authorization: Bearer）
+# Variants and the status expected while the relay's rules are unchanged (observed on anyrouter, 2026-09-18):
+#   baseline     full minimal request                    200
+#   no-system    opener replaced by a plain sentence     503
+#   no-metadata  metadata removed                        503
+#   few-tools    only 2 Claude Code tool names           520
+#   model-1m     model carries a [1M] suffix             429
+#   no-beta      anthropic-beta header removed           400
+#
+# Usage:
+#   RELAY_API_KEY=sk-xxx scripts/probe-relay.sh            # run all variants
+#   RELAY_API_KEY=sk-xxx scripts/probe-relay.sh baseline   # run only the given variants (one or more)
+# Environment:
+#   RELAY_BASE_URL  default https://anyrouter.top (no /v1 suffix)
+#   RELAY_MODEL     default claude-fable-5-1
+#   RELAY_AUTH      api-key (default, sends x-api-key) or bearer (sends Authorization: Bearer)
 set -euo pipefail
 
 BASE_URL="${RELAY_BASE_URL:-https://anyrouter.top}"
 MODEL="${RELAY_MODEL:-claude-fable-5-1}"
 AUTH="${RELAY_AUTH:-api-key}"
-: "${RELAY_API_KEY:?请设置 RELAY_API_KEY}"
+: "${RELAY_API_KEY:?set RELAY_API_KEY}"
 
 CC_SENTENCE="You are Claude Code, Anthropic's official CLI for Claude."
 BETA="context-1m-2025-08-07"
@@ -34,7 +41,7 @@ tools_json() {
 	printf '[%s]' "$out"
 }
 
-# 输出：payload<TAB>是否带 beta 头
+# Output: payload<TAB>whether to send the beta header
 build_variant() {
 	local variant="$1"
 	local system="[{\"type\":\"text\",\"text\":\"$CC_SENTENCE\"}]"
@@ -48,7 +55,7 @@ build_variant() {
 		few-tools) tools="$(tools_json Agent Bash)" ;;
 		model-1m) model="${MODEL}[1M]" ;;
 		no-beta) with_beta=0 ;;
-		*) echo "未知变体：$variant（可用：baseline no-system no-metadata few-tools model-1m no-beta）" >&2; return 2 ;;
+		*) echo "unknown variant: $variant (available: baseline no-system no-metadata few-tools model-1m no-beta)" >&2; return 2 ;;
 	esac
 	printf '{"model":"%s","max_tokens":16,"stream":false,"system":%s,"messages":[{"role":"user","content":"Reply with exactly: pong"}],"tools":%s%s}\t%s' \
 		"$model" "$system" "$tools" "$metadata" "$with_beta"
@@ -78,9 +85,9 @@ probe() {
 	code="$(curl -sS -o "$body" -w '%{http_code}' -X POST "$BASE_URL/v1/messages?beta=true" "${headers[@]}" --data "$payload" || echo 000)"
 	expected="$(expected_status "$variant")"
 	if [ "$code" = "$expected" ]; then
-		printf '%-12s %s（符合预期）\n' "$variant" "$code"
+		printf '%-12s %s (as expected)\n' "$variant" "$code"
 	else
-		printf '%-12s %s（预期 %s）  <-- 规则可能已变\n' "$variant" "$code" "$expected"
+		printf '%-12s %s (expected %s)  <-- rule may have changed\n' "$variant" "$code" "$expected"
 		head -c 300 "$body"; echo
 	fi
 	rm -f "$body"

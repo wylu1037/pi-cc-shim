@@ -27,11 +27,11 @@ describe("formatStatus", () => {
 		deps.state.lastStatus = { code: 200, at: "t1", source: "response", model: "claude-fable-5-1" };
 		deps.state.lastInjection = { at: "t0", model: "claude-fable-5-1", summaries: ["model: a → b"] };
 		const text = formatStatus(deps, model);
-		assert.match(text, /✓ 生效中：baseUrl 包含 "anyrouter.top"/);
+		assert.match(text, /✓ active: baseUrl contains "anyrouter.top"/);
 		assert.match(text, /any\.router\.claude \/ claude-fable-5-1/);
 		assert.match(text, /HTTP 200/);
 		assert.match(text, /- model: a → b/);
-		assert.match(text, /内置默认值/);
+		assert.match(text, /built-in defaults/);
 	});
 
 	test("关闭、无请求、dump 就绪的展示", () => {
@@ -39,9 +39,9 @@ describe("formatStatus", () => {
 		deps.state.enabled = false;
 		deps.dump.arm();
 		const text = formatStatus(deps, undefined);
-		assert.match(text, /○ 未生效：已通过 \/cc-shim off 关闭/);
-		assert.match(text, /尚无请求/);
-		assert.match(text, /dump：已就绪/);
+		assert.match(text, /○ inactive: disabled via \/cc-shim off/);
+		assert.match(text, /no requests yet/);
+		assert.match(text, /Dump: armed/);
 	});
 });
 
@@ -60,7 +60,7 @@ describe("createShimCommand", () => {
 		const { ctx, notices } = fakeCtx(model);
 
 		await command.handler("", ctx);
-		assert.match(notices[0] ?? "", /生效中/);
+		assert.match(notices[0] ?? "", /✓ active/);
 
 		await command.handler("off", ctx);
 		assert.equal(deps.state.enabled, false);
@@ -76,7 +76,7 @@ describe("createShimCommand", () => {
 		await command.handler("dump", ctx);
 		assert.equal(deps.dump.armed, true);
 		await command.handler("bogus", ctx);
-		assert.match(notices.at(-1) ?? "", /未知子命令 "bogus"/);
+		assert.match(notices.at(-1) ?? "", /unknown subcommand "bogus"/);
 	});
 
 	test("参数补全按前缀过滤", () => {

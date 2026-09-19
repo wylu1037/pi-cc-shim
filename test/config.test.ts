@@ -27,7 +27,7 @@ describe("loadConfig", () => {
 	test("JSON 语法错误：默认值并警告", () => {
 		const loaded = loadConfig("/x", () => "{ nope");
 		assert.equal(loaded.source, "defaults");
-		assert.match(loaded.warnings[0] ?? "", /不是合法 JSON/);
+		assert.match(loaded.warnings[0] ?? "", /not valid JSON/);
 	});
 
 	test("合法文件：覆盖对应字段，其余保持默认", () => {
@@ -51,7 +51,7 @@ describe("mergeConfig", () => {
 	test("未知字段给出警告但不影响其它字段", () => {
 		const { config, warnings } = mergeConfig({ foo: 1, stripModelSuffix: false });
 		assert.equal(config.stripModelSuffix, false);
-		assert.deepEqual(warnings, ["未知字段 foo，已忽略"]);
+		assert.deepEqual(warnings, ["unknown field foo ignored"]);
 	});
 
 	test("顶层不是对象时全部使用默认值", () => {

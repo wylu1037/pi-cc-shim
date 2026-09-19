@@ -30,8 +30,8 @@ const writeToDisk: SnapshotWriter = (path, content) => {
 };
 
 /**
- * /cc-shim dump 的一次性快照。
- * headers 钩子和 request 钩子是同一请求内先后触发的两次回调，所以先暂存请求头，再在拿到 payload 时一起落盘。
+ * One-shot snapshot for /cc-shim dump.
+ * The headers hook and the request hook are two callbacks fired in sequence for the same request, so headers are buffered first and written together once the payload arrives.
  */
 export class DumpRecorder {
 	readonly filePath: string;
@@ -57,7 +57,7 @@ export class DumpRecorder {
 		if (this.#armed) this.#headers = redactHeaders(headers);
 	}
 
-	/** 已武装时写文件并返回路径，随后自动解除；未武装时什么都不做 */
+	/** When armed, writes the file, returns its path and disarms; otherwise does nothing */
 	captureRequest(snapshot: Omit<DumpSnapshot, "capturedAt" | "headers">): string | undefined {
 		if (!this.#armed) return undefined;
 		const full: DumpSnapshot = { capturedAt: new Date().toISOString(), ...snapshot, headers: this.#headers };
