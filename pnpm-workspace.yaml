@@ -1,0 +1,5 @@
+# pi-coding-agent 的传递依赖带有 build 脚本，本包用不到，显式拒绝以免 pnpm 11 在每次运行脚本前报错
+allowBuilds:
+  "@google/genai": false
+  esbuild: false
+  protobufjs: false

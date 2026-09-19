@@ -1,0 +1,53 @@
+{
+  "name": "pi-cc-shim",
+  "version": "0.1.0",
+  "description": "Make pi requests pass Claude Code fingerprint checks on relays like anyrouter",
+  "type": "module",
+  "keywords": [
+    "pi-package",
+    "pi-extension",
+    "anthropic",
+    "claude-code",
+    "relay",
+    "anyrouter"
+  ],
+  "license": "MIT",
+  "author": "wylu1037",
+  "homepage": "https://github.com/wylu1037/pi-cc-shim#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/wylu1037/pi-cc-shim.git"
+  },
+  "bugs": "https://github.com/wylu1037/pi-cc-shim/issues",
+  "packageManager": "pnpm@11.24.0",
+  "engines": {
+    "node": ">=22.19.0"
+  },
+  "files": [
+    "extensions",
+    "src",
+    "scripts",
+    "docs/relay-rules.md",
+    "README.md",
+    "LICENSE"
+  ],
+  "pi": {
+    "extensions": [
+      "./extensions"
+    ]
+  },
+  "scripts": {
+    "test": "node --test \"test/**/*.test.ts\"",
+    "typecheck": "tsc --noEmit",
+    "check": "pnpm typecheck && pnpm test",
+    "e2e": "bash scripts/e2e.sh"
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "*"
+  },
+  "devDependencies": {
+    "@earendil-works/pi-coding-agent": "0.85.1",
+    "@types/node": "^26.6.1",
+    "typescript": "^5.9.3"
+  }
+}
